@@ -9,7 +9,7 @@ char pass[] = "charan4321";
 String LED_id = "1";
 
 char serverAddress[] = "192.168.43.46";
-String path = "/arduino/esp32_update.php";
+String path = "/arduino/nano_update.php";
 
 WiFiClient wifi;
 HttpClient client = HttpClient(wifi, serverAddress, 80);
