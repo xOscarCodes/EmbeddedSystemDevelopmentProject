@@ -1,21 +1,21 @@
 #include <ArduinoHttpClient.h>
 #include <WiFiNINA.h>
 
-#define LOCK_PIN LED_BUILTIN
+#define LOCK_PIN 2
 
 char ssid[] = "Charan";
 char pass[] = "charan4321";
 
 String LED_id = "1";
 
-char serverAddress[] = "192.168.43.46";
-String path = "/arduino/esp32_update.php";
+char serverAddress[] = "192.168.43.40";
+String path = "/status_updater.php";
 
 WiFiClient wifi;
 HttpClient client = HttpClient(wifi, serverAddress, 80);
 
 String contentType = "application/x-www-form-urlencoded";
-String data_to_send = "check_lock_status=" + LED_id;
+String data_to_send = "check_lock_status=1";
 
 void wifiConnect();
 void sendPostReq(String path, String contentType, String data);
@@ -24,7 +24,7 @@ void setup()
 {
   delay(10);
   Serial.begin(9600);
-  pinMode(LED_BUILTIN, OUTPUT);
+  pinMode(LOCK_PIN, OUTPUT);
   WiFi.begin(ssid, pass);
 
   wifiConnect();
