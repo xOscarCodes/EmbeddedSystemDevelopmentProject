@@ -2,10 +2,10 @@
 #include <MQ2.h>
 nRF24 radio = new Module(8, 10, 9);
 
-int pin = A0;
-String lpg, co, smoke;
-
+int pin = A7;
+int lpg, co, smoke;
 MQ2 mq2(pin);
+String message; 
 
 void setup() {
   Serial.begin(9600);
@@ -34,43 +34,31 @@ void setup() {
 
 void loop() {
 
-lpg = String(mq2.readLPG());
-co = String(mq2.readCO());
-smoke = String(mq2.readSmoke());
 
-Serial.println(lpg);
-Serial.println(co);
-Serial.println(smoke);
-
-String sends =  lpg+ " "+co+ " "+ smoke;
-int state = radio.transmit(sends);
+lpg = (mq2.readLPG());
+co = (mq2.readCO());
+smoke = (mq2.readSmoke());
 
 
- 
-//  if (state == RADIOLIB_ERR_NONE) {
-//    // the packet was successfully transmitted
-//    Serial.println(F("success!"));
-//
-//  } else if (state == RADIOLIB_ERR_PACKET_TOO_LONG) {
-//    // the supplied packet was longer than 32 bytes
-//    Serial.println(F("too long!"));
-//
-//  } else if (state == RADIOLIB_ERR_ACK_NOT_RECEIVED) {
-//    // acknowledge from destination module
-//    // was not received within 15 retries
-//    Serial.println(F("ACK not received!"));
-//
-//  } else if (state == RADIOLIB_ERR_TX_TIMEOUT) {
-//    // timed out while transmitting
-//    Serial.println(F("timeout!"));
-//
-//  } else {
-//    // some other error occurred
-//    Serial.print(F("failed, code "));
-//    Serial.println(state);
-//
-//  }
+if(smoke > 100)
+{
+  message = "danger";
+}
+if(co >175)
+{
+   message = "danger";
+}
+if(lpg > 1000)
+{
+   message = "danger";
+}
+else
+{
+  message = "okay"; 
+}
 
-  // wait for a second before transmitting again
-  // delay(1000);
+int state = radio.transmit(message);
+Serial.println(message); 
+
+   delay(1000);
 }
