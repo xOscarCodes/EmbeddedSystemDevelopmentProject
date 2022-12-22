@@ -1,5 +1,6 @@
 <?php
 $conn = mysqli_connect("IP address", "root", "seesproject", "seesproject");  // enter the ip address of kitchen side RPI
+
 $order_id = $_POST['order_id'];
 $food = $_POST['food'];
 $quantity = $_POST['quantity'];
