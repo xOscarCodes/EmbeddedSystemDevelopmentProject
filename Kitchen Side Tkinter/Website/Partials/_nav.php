@@ -1,4 +1,7 @@
 <?php
+
+require '../notification/fireNotifier.php';
+
 session_start();
 if (isset($_SESSION['loggedin']) && $_SESSION['loggedin'] == true) {
   $loggedin = true;
@@ -14,27 +17,37 @@ echo '
     <span class="navbar-toggler-icon"></span>
   </button>
   <div class="collapse navbar-collapse" id="navbarNav">
-    <ul class="navbar-nav">
-      <li class="nav-item">
-        <a class="nav-link active" aria-current="page" href="../LoginSystem/Welcome.php">Home</a>
-      </li>';
+    <ul class="navbar-nav">';
+    if ($loggedin)
+    { echo '<li class="nav-item">
+            <a class="nav-link active" aria-current="page" href="../LoginSystem/Welcome.php">Home</a>
+          </li>';
+    }
 if (!$loggedin) {
   echo '<li class="nav-item">
-        <a class="nav-link" href="../LoginSystem/login.php">Login</a>
+        <a class="nav-link active" href="../LoginSystem/login.php">Admin Login</a>
       </li>';
+      echo '<li class="nav-item">
+      <a class="nav-link active" href="../KitchenLogin/Kitchenlogin.php">Kitchen Login</a>
+    </li>';
+    echo '  </li>      
+<li class="nav-item">
+<a class="nav-link active" href="../About/about.php">Developer Team</a>
+</li>';
 }
 if ($loggedin) {
   echo '
       <li class="nav-item">
-      <a class="nav-link" href="../Lock/lock.php">Locking System</a>
+      <a class="nav-link active" href="../Lock/lock.php">Locking System</a>
     </li>
     <li class="nav-item">
-    <a class="nav-link" href="../LoginSystem/signup.php">Sign Up</a>
+    <a class="nav-link active" href="../LoginSystem/signup.php">Sign Up</a>
   </li>      
   <li class="nav-item">
-  <a class="nav-link" href="../LoginSystem/logout.php">Log Out</a>
+  <a class="nav-link active" href="../LoginSystem/logout.php">Log Out</a>
 </li>';
 }
+
 echo '
     </ul>
   </div>

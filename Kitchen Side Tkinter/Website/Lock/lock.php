@@ -208,7 +208,14 @@ if ($status) {
         echo "<tr>
               <th scope='row'>" . $row['lock_id'] . "</th>
               <td>" . $row['lock_location'] . "</td>
-              <td>" . $row['lock_status'] . "</td>
+              <td>"; 
+              if ($row['lock_status'] == 1)
+              {
+                echo "LOCK";
+              } else if ($row['lock_status'] == 0){
+                echo "UNLOCK";
+              }
+              echo "</td>
               <td>
               <button class='status btn btn-sm btn-primary' id=s" . $row['lock_id'] . ">Change Status</button>
               <button class='edit btn btn-sm btn-primary' id=" . $row['lock_id'] . ">Edit</button> 

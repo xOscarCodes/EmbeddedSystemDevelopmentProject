@@ -1,49 +1,87 @@
-/*
-   RadioLib nRF24 Receive Example
-
-   This example listens for FSK transmissions using nRF24 2.4 GHz radio module.
-   To successfully receive data, the following settings have to be the same
-   on both transmitter and receiver:
-    - carrier frequency
-    - data rate
-    - transmit pipe on transmitter must match receive pipe
-      on receiver
-
-   For default module settings, see the wiki page
-   https://github.com/jgromes/RadioLib/wiki/Default-configuration#nrf24
-
-   For full API reference, see the GitHub Pages
-   https://jgromes.github.io/RadioLib/
-*/
-
-// include the library
 #include <RadioLib.h>
+#include <WiFiNINA.h>
+#include <ArduinoHttpClient.h>
+#include <FreeRTOS_SAMD21.h>
 
-// nRF24 has the following connections:
-// CS pin:    10
-// IRQ pin:   2
-// CE pin:    3
+char ssid[] = "charan";
+char pass[] = "charan4321";
+#define WIFI_TIMEOUT_MS 20000
+
+String LOCK_ID = "1";
+int n = 0;
+
+String serverAddress = "192.168.43.40";
+String path = "/status_updater.php";
+String contentType = "application/x-www-form-urlencoded";
+String data_to_send = "check_lock_status=" + LOCK_ID;
+
+WiFiClient wifi;
+HttpClient client = HttpClient(wifi, serverAddress, 80);
+
+int lock_pin = 2;
+int buzzer_pin = 3;
+
+TaskHandle_t keypad_handle = NULL;
+TaskHandle_t server_response = NULL;
+
+int j = 0;
+int x = 0;
+
+const char rows = 4; // set display to four rows
+const char cols = 4; // set display to three columns
+
+const char keys[rows][cols] = {
+  {'1', '2', '3', 'A'},
+  {'4', '5', '6', 'B'},
+  {'7', '8', '9', 'C'},
+  {'*', '0', '#', 'D'}
+};
+
+char rowPins[rows] = {A0, A1, A2, A3}; // connect to the row pinouts of the keypad
+char colPins[cols] = {5, 4, A6, A7};   // connect to the column pinouts of the keypad
+
+// Wiring: SDA pin is connected to A4 and SCL pin to A5.
+const String password = "4321"; // change your password here
+String input_password;
+
 nRF24 radio = new Module(8, 10, 9);
 
-// or using RadioShield
-// https://github.com/jgromes/RadioShield
-//nRF24 radio = RadioShield.ModuleA;
-  String lpg = "";
-  String co = "";
-  String smoke = "";
-  
-void setup() {
+void setup()
+{
   Serial.begin(9600);
+  input_password.reserve(32); // maximum input characters is 33, change if needed
 
-  // initialize nRF24 with default settings
+  for (char r = 0; r < rows; r++)
+  {
+    pinMode(rowPins[r], INPUT);     // set the row pins as input
+    digitalWrite(rowPins[r], HIGH); // turn on the pullups
+  }
+
+  for (char c = 0; c < cols; c++)
+  {
+    pinMode(colPins[c], OUTPUT); // set the column pins as output
+  }
+
+  pinMode(lock_pin, OUTPUT);
+  pinMode(buzzer_pin, OUTPUT);
+  digitalWrite(lock_pin, LOW);
+  digitalWrite(buzzer_pin, LOW);
+
+  WiFi.begin(ssid, pass);
+  wifiConnect();
+
   Serial.print(F("[nRF24] Initializing ... "));
   int state = radio.begin();
-  if(state == RADIOLIB_ERR_NONE) {
+  if (state == RADIOLIB_ERR_NONE)
+  {
     Serial.println(F("success!"));
-  } else {
+  }
+  else
+  {
     Serial.print(F("failed, code "));
     Serial.println(state);
-    while(true);
+    while (true)
+      ;
   }
 
   // set receive pipe 0 address
@@ -53,84 +91,318 @@ void setup() {
   Serial.print(F("[nRF24] Setting address for receive pipe 0 ... "));
   byte addr[] = {0x01, 0x23, 0x45, 0x67, 0x89};
   state = radio.setReceivePipe(0, addr);
-  if(state == RADIOLIB_ERR_NONE) {
+  if (state == RADIOLIB_ERR_NONE)
+  {
     Serial.println(F("success!"));
-  } else {
+  }
+  else
+  {
     Serial.print(F("failed, code "));
     Serial.println(state);
-    while(true);
+    while (true)
+      ;
+  }
+
+  vSetErrorSerial(&Serial);
+
+  // Creating Task
+  // xTaskCreate(
+  //     keepWifiAlive,
+  //     "Wifi Alive",
+  //     512,
+  //     NULL,
+  //     1,
+  //     NULL
+  // );
+
+  xTaskCreate(
+    updateFromServer,
+    "Update",
+    512,
+    NULL,
+    1,
+    &server_response);
+
+  xTaskCreate(
+    keypad_unlock // Function Name
+    ,
+    "keypad" // Task name
+    ,
+    512 // Stack size
+    ,
+    NULL // Task parameters
+    ,
+    1 // Task Priority
+    ,
+    &keypad_handle // Task Handler
+  );
+
+  xTaskCreate(
+    nRf24Recieve,
+    "nrf",
+    512,
+    NULL,
+    1,
+    NULL);
+
+  // Starting RTOS
+  vTaskStartScheduler();
+}
+
+void loop()
+{
+}
+
+void myDelayMs(int ms)
+{
+  vTaskDelay((ms * 1000) / portTICK_PERIOD_US);
+}
+
+void keepWifiAlive(void *parameters)
+{
+  for (;;)
+  {
+    if (WiFi.status() == WL_CONNECTED)
+    {
+      Serial.println("Wifi still connected");
+      myDelayMs(10000);
+      continue;
+    }
+
+    Serial.print("Attempting to connect to WPA SSID: ");
+    Serial.println(ssid);
+    WiFi.begin(ssid, pass);
+    unsigned long startAttemptTime = millis();
+
+    while (WiFi.begin(ssid, pass) != WL_CONNECTED && millis() - startAttemptTime < WIFI_TIMEOUT_MS)
+    {
+    }
+
+    if (WiFi.status() != WL_CONNECTED)
+    {
+      Serial.println("Wifi Failed");
+      myDelayMs(20000);
+      continue;
+    }
+
+    Serial.print("You're connected to the network: ");
+    Serial.println(ssid);
+    Serial.print("Connected, my IP: ");
+    Serial.println(WiFi.localIP());
   }
 }
 
-void loop() {
-  //Serial.print(F("[nRF24] Waiting for incoming transmission ... "));
-
-  // you can receive data as an Arduino String
-  // NOTE: receive() is a blocking method!
-  //       See example ReceiveInterrupt for details
-  //       on non-blocking reception method.
-
-
-  int n = 0;
-  String str;
-  int state = radio.receive(str);
-
-  if(str.length() != 0)
-    {
-      lpg = "";
-      co = "";
-      smoke = "";
-    }
-
-  for (int i = 0; i < str.length(); i++)
+void wifiConnect()
+{
+  Serial.print("Attempting to connect to WPA SSID: ");
+  Serial.println(ssid);
+  while (WiFi.begin(ssid, pass) != WL_CONNECTED)
   {
-    if (str[i] == ' ')
+    Serial.print(".");
+    delay(5000);
+  }
+
+  Serial.print("You're connected to the network: ");
+  Serial.println(ssid);
+  Serial.print("Connected, my IP: ");
+  Serial.println(WiFi.localIP());
+}
+
+void updateFromServer(void *parameters)
+{
+
+  for (;;)
+  {
+    if (WiFi.status() == WL_CONNECTED)
     {
-      n++;
-//      if (n == 4)
-//        n = 0;
+      client.post(path, contentType, data_to_send);
+
+      int response_code = client.responseStatusCode();
+
+      if (response_code > 0)
+      {
+        if (response_code == -1)
+        {
+          Serial.println("HTTP ERROR CONNECTION FAILED: " + String(response_code));
+        }
+        else if (response_code == -2)
+        {
+          Serial.println("HTTP ERROR API (Wrong parameters passed in function): " + String(response_code));
+        }
+        else if (response_code == -3)
+        {
+          Serial.println("HTTP ERROR TIMEOUT: " + String(response_code));
+        }
+        else if (response_code == -4)
+        {
+          Serial.println("HTTP ERROR INVALID RESPONSE: " + String(response_code));
+        }
+        else if (response_code == 200)
+        {
+          String response_body = client.responseBody();
+          Serial.print("Server Response: ");
+          Serial.println(response_body);
+
+          if (response_body == "LOCK")
+          {
+            digitalWrite(lock_pin, LOW);
+          }
+          else if (response_body == "UNLOCK")
+          {
+            digitalWrite(lock_pin, HIGH);
+          }
+        }
+      }
+      else
+      {
+        Serial.println("ERROR SENDING POST: " + String(response_code));
+      }
+    }
+    else
+    {
+      wifiConnect();
     }
 
-    else if (str[i] != ' ')
+    myDelayMs(100);
+  }
+}
+
+void nRf24Recieve(void *parametere)
+{
+  for (;;)
+  {
+    String str;
+    int state = radio.receive(str);
+
+    if (state == RADIOLIB_ERR_NONE)
     {
-      if (n == 0)
-        lpg = lpg + str[i];
+      // packet was successfully received
 
-      if (n == 1)
-        co = co + str[i];
+      if (str == "okay")
+      {
+        Serial.println(str);
+        if (n == 1)
+        {
+          if (server_response != NULL)
+          {
+            vTaskResume(server_response);
+          }
+          n = 0;
+        }
+        continue;
+      }
+      else if (str == "danger")
+      {
+        if (n == 0) {
+          if (server_response != NULL)
+          {
+            vTaskSuspend(server_response);
+          }
+          n = 1;
+        }
+        digitalWrite(lock_pin, HIGH);
 
-      if (n == 2)
-        smoke = smoke+ str[i];
+        digitalWrite(buzzer_pin, HIGH);
+        myDelayMs(500);
+        digitalWrite(buzzer_pin, LOW);
+        myDelayMs(500);
+
+      }
+      else
+      {
+        //
+      }
+
+      // print the data of the packet
     }
   }
-  
- Serial.println("lpg:" + lpg);
- Serial.println("co:" + co);
- Serial.println("smoke: "+ smoke);
-  
-  
+}
 
-  // you can also receive data as byte array
-  /*
-    byte byteArr[8];
-    int state = radio.receive(byteArr, 8);
-  */
-//
-//  if (state == RADIOLIB_ERR_NONE) {
-//    // packet was successfully received
-//    Serial.println(F("success!"));
-//
-    // print the data of the packet
- //   Serial.print(F("[nRF24] Data:\t\t"));
-//
-//  } else if (state == RADIOLIB_ERR_RX_TIMEOUT) {
-//    // timeout occurred while waiting for a packet
-//    Serial.println(F("timeout!"));
-//
-//  } else {
-//    // some other error occurred
-//    Serial.print(F("failed, code "));
-//    Serial.println(state);
+void keypad_unlock(void *parameters)
+{
+  for (;;)
+  {
+    char key = getKey();
 
-//  }
+    if (key)
+    {
+
+      Serial.println(key);
+
+      if (key == '*')
+      {
+        input_password = ""; // clear input password
+        x = 0;
+      }
+      else if (key == '#')
+      {
+
+        if (password == input_password)
+        {
+          Serial.println("password is correct");
+          Serial.println(input_password);
+          if (j == 1)
+          {
+            if (server_response != NULL)
+            {
+              vTaskResume(server_response);
+            }
+            digitalWrite(buzzer_pin, HIGH);
+            myDelayMs(100);
+            digitalWrite(buzzer_pin, LOW);
+            digitalWrite(lock_pin, HIGH);
+
+            j = 0;
+          }
+          else if (j == 0)
+          {
+            if (server_response != NULL)
+            {
+              vTaskSuspend(server_response);
+            }
+            digitalWrite(buzzer_pin, HIGH);
+            myDelayMs(100);
+            digitalWrite(buzzer_pin, LOW);
+            digitalWrite(lock_pin, LOW);
+            j = 1;
+          }
+        }
+        else
+        {
+          Serial.println("password is incorrect, try again");
+        }
+
+        input_password = ""; // clear input password
+        x = 0;
+      }
+      else
+      {
+        x = 1;
+        input_password += key; // append new character to input password string
+        // print * key as hiden character
+      }
+    }
+  }
+}
+
+char getKey()
+{
+  char k = 0;
+
+  for (char c = 0; c < cols; c++)
+  {
+    digitalWrite(colPins[c], LOW);
+    for (char r = 0; r < rows; r++)
+    {
+      if (digitalRead(rowPins[r]) == LOW)
+      {
+        myDelayMs(20); // 20ms debounce time
+        while (digitalRead(rowPins[r]) == LOW)
+          ;
+        k = keys[r][c];
+      }
+    }
+    digitalWrite(colPins[c], HIGH);
+  }
+  return k;
 }
