@@ -1,5 +1,5 @@
 <?php
-$conn = mysqli_connect("192.168.118.131", "root", "seesproject", "seesproject");
+$conn = mysqli_connect("IP Address of kitchen side", "root", "seesproject", "seesproject");
 
 $order_id = $_POST['order_id'];
 $food = $_POST['food'];
