@@ -1,8 +1,8 @@
 <?php
 $servername = "localhost";
 $dBUsername = "root";
-$dBPassword = "esdproject";
-$dBName = "door_data";
+$dBPassword = "seesproject";
+$dBName = "seesproject";
 $conn = mysqli_connect($servername, $dBUsername, $dBPassword, $dBName);
 if (!$conn) {
 	die("Connection failed: ".mysqli_connect_error());
